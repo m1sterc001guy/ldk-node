@@ -52,6 +52,7 @@ use crate::payment::asynchronous::static_invoice_store::StaticInvoiceStore;
 use crate::payment::store::{
 	PaymentDetails, PaymentDetailsUpdate, PaymentDirection, PaymentKind, PaymentStatus,
 };
+use crate::payment::PendingBolt12InvoiceContexts;
 use crate::runtime::Runtime;
 use crate::types::{
 	CustomTlvRecord, DynStore, KeysManager, OnionMessenger, PaymentStore, Sweeper, Wallet,
@@ -264,6 +265,23 @@ pub enum Event {
 		/// The outpoint of the channel's splice funding transaction.
 		new_funding_txo: OutPoint,
 	},
+	/// A BOLT12 invoice has been received, and is waiting to be paid or abandoned.
+	///
+	/// This event will only be generated if [`Config::manually_handle_bolt12_invoices`] is set
+	/// to `true`.
+	///
+	/// Call [`Bolt12Payment::send_payment_for_bolt12_invoice`] to pay the invoice or
+	/// [`Bolt12Payment::abandon_bolt12_invoice`] to abandon it.
+	///
+	/// [`Config::manually_handle_bolt12_invoices`]: crate::config::Config::manually_handle_bolt12_invoices
+	/// [`Bolt12Payment::send_payment_for_bolt12_invoice`]: crate::payment::Bolt12Payment::send_payment_for_bolt12_invoice
+	/// [`Bolt12Payment::abandon_bolt12_invoice`]: crate::payment::Bolt12Payment::abandon_bolt12_invoice
+	Bolt12InvoiceReceived {
+		/// A local identifier used to track the payment.
+		payment_id: PaymentId,
+		/// The amount in millisatoshis specified in the invoice.
+		amount_msat: u64,
+	},
 	/// A channel splice has failed.
 	SpliceFailed {
 		/// The `channel_id` of the channel.
@@ -345,6 +363,10 @@ impl_writeable_tlv_based_enum!(Event,
 		(3, counterparty_node_id, required),
 		(5, user_channel_id, required),
 		(7, abandoned_funding_txo, option),
+	},
+	(10, Bolt12InvoiceReceived) => {
+		(0, payment_id, required),
+		(2, amount_msat, required),
 	},
 );
 
@@ -512,6 +534,7 @@ where
 	runtime: Arc<Runtime>,
 	logger: L,
 	config: Arc<Config>,
+	pending_bolt12_invoice_contexts: PendingBolt12InvoiceContexts,
 	static_invoice_store: Option<StaticInvoiceStore>,
 	onion_messenger: Arc<OnionMessenger>,
 	om_mailbox: Option<Arc<OnionMessageMailbox>>,
@@ -528,9 +551,11 @@ where
 		output_sweeper: Arc<Sweeper>, network_graph: Arc<Graph>,
 		liquidity_source: Option<Arc<LiquiditySource<Arc<Logger>>>>,
 		payment_store: Arc<PaymentStore>, peer_store: Arc<PeerStore<L>>,
-		keys_manager: Arc<KeysManager>, static_invoice_store: Option<StaticInvoiceStore>,
-		onion_messenger: Arc<OnionMessenger>, om_mailbox: Option<Arc<OnionMessageMailbox>>,
-		runtime: Arc<Runtime>, logger: L, config: Arc<Config>,
+		keys_manager: Arc<KeysManager>,
+		pending_bolt12_invoice_contexts: PendingBolt12InvoiceContexts,
+		static_invoice_store: Option<StaticInvoiceStore>, onion_messenger: Arc<OnionMessenger>,
+		om_mailbox: Option<Arc<OnionMessageMailbox>>, runtime: Arc<Runtime>, logger: L,
+		config: Arc<Config>,
 	) -> Self {
 		Self {
 			event_queue,
@@ -547,6 +572,7 @@ where
 			logger,
 			runtime,
 			config,
+			pending_bolt12_invoice_contexts,
 			static_invoice_store,
 			onion_messenger,
 			om_mailbox,
@@ -1568,8 +1594,30 @@ where
 						.await;
 				}
 			},
-			LdkEvent::InvoiceReceived { .. } => {
-				debug_assert!(false, "We currently don't handle BOLT12 invoices manually, so this event should never be emitted.");
+			LdkEvent::InvoiceReceived { payment_id, invoice, context, .. } => {
+				let amount_msat = invoice.amount_msats();
+				log_info!(
+					self.logger,
+					"Received BOLT12 invoice for payment_id {} with amount {}msat for manual handling",
+					payment_id,
+					amount_msat,
+				);
+
+				self.pending_bolt12_invoice_contexts
+					.lock()
+					.unwrap()
+					.insert(payment_id, (invoice, context));
+
+				self.event_queue
+					.add_event(Event::Bolt12InvoiceReceived { payment_id, amount_msat })
+					.await
+					.unwrap_or_else(|e| {
+						log_error!(
+							self.logger,
+							"Failed to push Bolt12InvoiceReceived event: {}",
+							e
+						);
+					});
 			},
 			LdkEvent::ConnectionNeeded { node_id, addresses } => {
 				let spawn_logger = self.logger.clone();

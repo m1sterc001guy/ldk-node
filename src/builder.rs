@@ -1883,6 +1883,9 @@ fn build_with_store_internal(
 		lnurl_auth,
 		is_running,
 		node_metrics,
+		pending_bolt12_invoice_contexts: Arc::new(std::sync::Mutex::new(
+			std::collections::HashMap::new(),
+		)),
 		om_mailbox,
 		async_payments_role,
 		hrn_resolver,

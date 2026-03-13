@@ -162,8 +162,8 @@ use logger::{log_debug, log_error, log_info, log_trace, LdkLogger, Logger};
 use payment::asynchronous::om_mailbox::OnionMessageMailbox;
 use payment::asynchronous::static_invoice_store::StaticInvoiceStore;
 use payment::{
-	Bolt11Payment, Bolt12Payment, OnchainPayment, PaymentDetails, SpontaneousPayment,
-	UnifiedPayment,
+	Bolt11Payment, Bolt12Payment, OnchainPayment, PaymentDetails, PendingBolt12InvoiceContexts,
+	SpontaneousPayment, UnifiedPayment,
 };
 use peer_store::{PeerInfo, PeerStore};
 use runtime::Runtime;
@@ -232,6 +232,7 @@ pub struct Node {
 	lnurl_auth: Arc<LnurlAuth>,
 	is_running: Arc<RwLock<bool>>,
 	node_metrics: Arc<RwLock<NodeMetrics>>,
+	pending_bolt12_invoice_contexts: PendingBolt12InvoiceContexts,
 	om_mailbox: Option<Arc<OnionMessageMailbox>>,
 	async_payments_role: Option<AsyncPaymentsRole>,
 	hrn_resolver: Arc<HRNResolver>,
@@ -583,6 +584,7 @@ impl Node {
 			Arc::clone(&self.payment_store),
 			Arc::clone(&self.peer_store),
 			Arc::clone(&self.keys_manager),
+			Arc::clone(&self.pending_bolt12_invoice_contexts),
 			static_invoice_store,
 			Arc::clone(&self.onion_messenger),
 			self.om_mailbox.clone(),
@@ -900,6 +902,7 @@ impl Node {
 			Arc::clone(&self.channel_manager),
 			Arc::clone(&self.keys_manager),
 			Arc::clone(&self.payment_store),
+			Arc::clone(&self.pending_bolt12_invoice_contexts),
 			Arc::clone(&self.config),
 			Arc::clone(&self.is_running),
 			Arc::clone(&self.logger),
@@ -916,6 +919,7 @@ impl Node {
 			Arc::clone(&self.channel_manager),
 			Arc::clone(&self.keys_manager),
 			Arc::clone(&self.payment_store),
+			Arc::clone(&self.pending_bolt12_invoice_contexts),
 			Arc::clone(&self.config),
 			Arc::clone(&self.is_running),
 			Arc::clone(&self.logger),

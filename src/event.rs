@@ -279,6 +279,8 @@ pub enum Event {
 	Bolt12InvoiceReceived {
 		/// A local identifier used to track the payment.
 		payment_id: PaymentId,
+		/// The hash of the payment as specified in the invoice.
+		payment_hash: PaymentHash,
 		/// The amount in millisatoshis specified in the invoice.
 		amount_msat: u64,
 	},
@@ -366,7 +368,8 @@ impl_writeable_tlv_based_enum!(Event,
 	},
 	(10, Bolt12InvoiceReceived) => {
 		(0, payment_id, required),
-		(2, amount_msat, required),
+		(2, payment_hash, required),
+		(4, amount_msat, required),
 	},
 );
 
@@ -1596,6 +1599,7 @@ where
 			},
 			LdkEvent::InvoiceReceived { payment_id, invoice, context, .. } => {
 				let amount_msat = invoice.amount_msats();
+				let payment_hash = invoice.payment_hash();
 				log_info!(
 					self.logger,
 					"Received BOLT12 invoice for payment_id {} with amount {}msat for manual handling",
@@ -1609,7 +1613,11 @@ where
 					.insert(payment_id, (invoice, context));
 
 				self.event_queue
-					.add_event(Event::Bolt12InvoiceReceived { payment_id, amount_msat })
+					.add_event(Event::Bolt12InvoiceReceived {
+						payment_id,
+						payment_hash,
+						amount_msat,
+					})
 					.await
 					.unwrap_or_else(|e| {
 						log_error!(

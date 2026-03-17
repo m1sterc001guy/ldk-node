@@ -1336,9 +1336,10 @@ async fn bolt12_manual_invoice_handling() {
 	// Should get Bolt12InvoiceReceived instead of PaymentSuccessful
 	let event = node_a.next_event_async().await;
 	match event {
-		Event::Bolt12InvoiceReceived { payment_id: evt_id, amount_msat } => {
+		Event::Bolt12InvoiceReceived { payment_id: evt_id, payment_hash, amount_msat } => {
 			assert_eq!(evt_id, payment_id);
 			assert_eq!(amount_msat, expected_amount_msat);
+			assert_ne!(payment_hash, PaymentHash([0u8; 32]));
 			node_a.event_handled().unwrap();
 		},
 		ref e => panic!("Expected Bolt12InvoiceReceived, got: {:?}", e),

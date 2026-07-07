@@ -54,12 +54,10 @@ fn migrate_v1_to_v2(connection: &mut Connection, kv_table_name: &str) -> io::Res
 	})?;
 
 	// Update user_version
-	tx.pragma(Some(rusqlite::DatabaseName::Main), "user_version", 2u16, |_| Ok(())).map_err(
-		|e| {
-			let msg = format!("Failed to upgrade user_version from 1 to 2: {}", e);
-			io::Error::new(io::ErrorKind::Other, msg)
-		},
-	)?;
+	tx.pragma(Some("main"), "user_version", 2u16, |_| Ok(())).map_err(|e| {
+		let msg = format!("Failed to upgrade user_version from 1 to 2: {}", e);
+		io::Error::new(io::ErrorKind::Other, msg)
+	})?;
 
 	tx.commit().map_err(|e| {
 		let msg = format!("Failed to migrate table {} from v1 to v2: {}", kv_table_name, e);
@@ -150,12 +148,10 @@ fn migrate_v2_to_v3(connection: &mut Connection, kv_table_name: &str) -> io::Res
 	tx.execute(&sql, []).map_err(map_err)?;
 
 	// Update user_version
-	tx.pragma(Some(rusqlite::DatabaseName::Main), "user_version", 3u16, |_| Ok(())).map_err(
-		|e| {
-			let msg = format!("Failed to upgrade user_version from 2 to 3: {}", e);
-			io::Error::new(io::ErrorKind::Other, msg)
-		},
-	)?;
+	tx.pragma(Some("main"), "user_version", 3u16, |_| Ok(())).map_err(|e| {
+		let msg = format!("Failed to upgrade user_version from 2 to 3: {}", e);
+		io::Error::new(io::ErrorKind::Other, msg)
+	})?;
 
 	tx.commit().map_err(|e| {
 		let msg = format!("Failed to migrate table {} from v2 to v3: {}", kv_table_name, e);
@@ -198,12 +194,7 @@ mod tests {
 			let connection = Connection::open(db_file_path.clone()).unwrap();
 
 			connection
-				.pragma(
-					Some(rusqlite::DatabaseName::Main),
-					"user_version",
-					old_schema_version,
-					|_| Ok(()),
-				)
+				.pragma(Some("main"), "user_version", old_schema_version, |_| Ok(()))
 				.unwrap();
 
 			let sql = format!(
@@ -282,12 +273,7 @@ mod tests {
 			let connection = Connection::open(db_file_path.clone()).unwrap();
 
 			connection
-				.pragma(
-					Some(rusqlite::DatabaseName::Main),
-					"user_version",
-					old_schema_version,
-					|_| Ok(()),
-				)
+				.pragma(Some("main"), "user_version", old_schema_version, |_| Ok(()))
 				.unwrap();
 
 			let sql = format!(

@@ -1,5 +1,5 @@
 [package]
-name = "ldk-node"
+name = "fedimint-ldk-node"
 version = "0.8.0+git"
 authors = ["Elias Rohrer <dev@tnull.de>"]
 homepage = "https://lightningdevkit.org/"
